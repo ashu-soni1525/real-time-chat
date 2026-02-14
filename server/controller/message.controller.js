@@ -2,46 +2,20 @@ import bcrypt from "bcryptjs";
 import User from "../model/User.js";
 import Message from "../model/message.js";
 import cloudinary from "../lib/cloudinary.js"
+import {io,userSocketMap} from "../server.js"
 
-// export const getUsersFromSidebar = async (req, res) => {
-// try {
-//     const userId = req.user._id;
-//     const filteredUsers = await User.find({_id:{$ne: userId}}).select("-password")
-// const unseenMessages={}
-// const promises = filteredUsers.map(async ()=>{
-//     const messages = await Message.find({senderId: user._id, reciverId:userId, seen: false})
-// if(message.length > 0){
-//     unseenMessages[user._id]= messages.length;
-// }
-// })
-//     await Promise.all(promises)
-//      res.json({
-//         success: true,
-//         users:filteredUsers,
-//         unseenMessages
-//       });
-// } catch (error) {
-//      res.json({
-//         success: false,
-//         message: error.message,
-//       });
-// }
-// };
+
 
 export const getUsersFromSidebar = async (req, res) => {
   try {
     const userId = req.user._id
-
-    // Get all users except logged-in user
     const users = await User.find({ _id: { $ne: userId } }).select("-password")
-
     const unseenMessages = {}
-
     const promises = users.map(async (user) => {
       const messages = await Message.find({
-        sender: user._id,
-        receiver: userId,
-        isRead: false,
+        senderId: user._id,
+        receiverId: userId,
+        seen: false,
       })
 
       if (messages.length > 0) {
@@ -69,13 +43,14 @@ export const getUsersFromSidebar = async (req, res) => {
 export const getMessages = async (req, res) => {
   try {
     const { id: selectedUserId } = req.params
+    console.log("selectedUserId", selectedUserId)
     const myId = req.user._id
-
+console.log("myId", myId)
     // 1️⃣ Get all messages between logged-in user and selected user
     const messages = await Message.find({
       $or: [
-        { sender: myId, receiver: selectedUserId },
-        { sender: selectedUserId, receiver: myId },
+        { senderId: myId, receiverId: selectedUserId },
+        { senderId: selectedUserId, receiverId: myId },
       ],
     }).sort({ createdAt: 1 })
 
@@ -83,7 +58,8 @@ export const getMessages = async (req, res) => {
     await Message.updateMany(
       {
         senderId: selectedUserId,
-        receiver: myId,
+        receiverId: myId,
+           seen: false,
       },
       {seen:true}
     )
@@ -138,10 +114,19 @@ const newMessage = await Message.create({
     senderId,
     receiverId,
     text,
-    image:imageUrl
+    image:imageUrl,
+      seen: false,
 })
+const receiverSocketId= userSocketMap[receiverId];
+console.log("receiverSocketId", receiverSocketId)
+if(receiverSocketId){
+    if(receiverSocketId){
+ io.to(receiverSocketId).emit("newMessage", newMessage)
+    }
+}
  res.json({
       success: true,
+      newMessage
     })
   } catch (error) {
     console.log(error.message)

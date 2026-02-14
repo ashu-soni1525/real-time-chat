@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import assets from "../assets/assets";
+import { useContext } from "react";
+import { AuthContext } from "../../context/AuthContex";
+import { useEffect } from "react";
 
 const LoginPage = () => {
   const [currState, setCurrState] = useState("Sign up");
@@ -8,26 +11,49 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [bio, setBio] = useState("");
   const [isDataSubmitted, setIsDataSubmitted] = useState(false);
-const  onSubmitHandler =(event)=>{
-event.preventDefault();
-if(currState === "Sign up" && !isDataSubmitted){
-setIsDataSubmitted(true)
-return;
-}
-}
+  const { login ,authUser} = useContext(AuthContext);
+
+
+ const onSubmitHandler = async (event) => {
+  event.preventDefault();
+
+  if (currState === "Sign up" && !isDataSubmitted) {
+    setIsDataSubmitted(true);
+    return;
+  }
+
+  await login(
+    currState === "Sign up" ? "signup" : "login",
+    { fullName, email, password, bio }
+  );
+};
+
+
   return (
     <div className="min-h-screen bg-cover bg-center flex items-center justify-center gap-8 sm:justify-evenly max:col-flex backdrop-blur-2xl">
       <img src={assets.logo_big} alt="" className="w-[min(30vw,250px)]" />
-      <form onClick={onSubmitHandler} className="border-2 bg-white/8 text-white border-gray-500 p-6 flex flex-col gap-6 rounded-lg shadow-lg">
+      <form
+        onSubmit={onSubmitHandler}
+        className="border-2 bg-white/8 text-white border-gray-500 p-6 flex flex-col gap-6 rounded-lg shadow-lg"
+      >
         <h2 className="font-medium text-2xl flex justify-between items-center">
           {currState}
 
-          {isDataSubmitted && <img onClick={()=> setIsDataSubmitted(false)}  src={assets.arrow_icon} alt="" className="w-5 cursor-pointer" />}
+          {isDataSubmitted && (
+            <img
+              onClick={() => setIsDataSubmitted(false)}
+              src={assets.arrow_icon}
+              alt=""
+              className="w-5 cursor-pointer"
+            />
+          )}
         </h2>
 
         {currState === "Sign up" && !isDataSubmitted && (
           <input
             type="text"
+            value={fullName}
+             onChange={(e) => setFullName(e.target.value)}
             className="p-2 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Full Name"
             required

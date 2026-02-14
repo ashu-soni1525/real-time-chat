@@ -1,12 +1,73 @@
 import bcrypt from "bcryptjs";
 import User from "../model/User.js";
+import jwt from "jsonwebtoken";
 import { generateToken } from "../lib/utils.js";
 import cloudinary from "../lib/cloudinary.js"
+
+
+// export const signup = async (req, res) => {
+//   const { fullName, email, password, bio } = req.body;
+
+//   try {
+//     // 1️⃣ Validate fields
+//     if (!fullName || !email || !password || !bio) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "All fields are required",
+//       });
+//     }
+
+//     // 2️⃣ Check existing user
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Account already exists",
+//       });
+//     }
+
+//     // 3️⃣ Hash password
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
+
+//     // 4️⃣ Create user
+//     const user = await User.create({
+//       fullName,
+//       email,
+//       password: hashedPassword,
+//       bio,
+//     });
+
+//     // 5️⃣ Generate token
+//     const token = generateToken(user._id);
+
+//     // 6️⃣ Success response
+//     return res.status(201).json({
+//       success: true,
+//       message: "Signup successful",
+//       token,
+//       data: {
+//         id: user._id,
+//         fullName: user.fullName,
+//         email: user.email,
+//         bio: user.bio,
+//       },
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//     });
+//   }
+// };
+
+
 export const signup = async (req, res) => {
   const { fullName, email, password, bio } = req.body;
 
   try {
-    // 1️⃣ Validate fields
+    
     if (!fullName || !email || !password || !bio) {
       return res.status(400).json({
         success: false,
@@ -14,7 +75,7 @@ export const signup = async (req, res) => {
       });
     }
 
-    // 2️⃣ Check existing user
+    // ✅ CHANGE 2: Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -23,11 +84,11 @@ export const signup = async (req, res) => {
       });
     }
 
-    // 3️⃣ Hash password
+    // ✅ CHANGE 3: Secure password hashing
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 4️⃣ Create user
+    // ✅ CHANGE 4: Create user
     const user = await User.create({
       fullName,
       email,
@@ -35,10 +96,8 @@ export const signup = async (req, res) => {
       bio,
     });
 
-    // 5️⃣ Generate token
-    const token = generateToken(user._id);
-
-    // 6️⃣ Success response
+    // ✅ CHANGE 5: JWT payload must be an object
+const token = generateToken(user._id);
     return res.status(201).json({
       success: true,
       message: "Signup successful",
@@ -51,7 +110,7 @@ export const signup = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("SIGNUP ERROR:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -90,8 +149,7 @@ export const login = async (req, res) => {
     }
 
     // 4️⃣ Generate token
-    const token = generateToken(user._id);
-
+const token = generateToken(user._id);
     // 5️⃣ Success response
     return res.status(200).json({
       success: true,
@@ -115,25 +173,43 @@ export const login = async (req, res) => {
 };
 
 
-export const upadateProfile = async (req, res) => {
-try {
-  const {profilePic, bio, fullName}=req.body;
-  const userId= req.user._id;
-  let updatedUser;
-  if(!profilePic){
-    updatedUser = await User.findByIdAndUpdate(userId,{bio, fullName},{new:true});
-  }else{
-    const uplode = await cloudinary.uploder.upload(profilePic);
-    updatedUser = await User.findByIdAndUpdate(userId,{profilePic:upload.secure_url, bio ,fullName},{new:true})
-return res.status(400).json({
-        success: true,
-        User: updatedUser,
-      });
-  }
-} catch (error) {
-  return res.status(400).json({
+export const updateProfile = async (req, res) => {
+  try {
+    const { profilePic, bio, fullName } = req.body || {};
+console.log("updateProfile body:", req.body);
+    if (!fullName || !bio) {
+      return res.status(400).json({
         success: false,
-        message: error.message,
+        message: "fullName and bio required",
       });
-}
+    }
+    const userId = req.user._id;
+console.log("updateProfile userId:", userId);
+    const updateData = { fullName, bio };
+
+    if (profilePic && profilePic.startsWith("data:image")) {
+      const upload = await cloudinary.uploader.upload(profilePic);
+      updateData.profilePic = upload.secure_url;
+    }
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, select: "-password" }
+    );
+
+    return res.status(200).json({
+      success: true,
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("updateProfile error:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Profile update failed",
+    });
+  }
 };
+
+
+
+

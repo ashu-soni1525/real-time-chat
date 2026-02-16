@@ -3,64 +3,9 @@ import User from "../model/User.js";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../lib/utils.js";
 import cloudinary from "../lib/cloudinary.js"
+import admin from '../config/firebaseAdmin.js'; // Step 3 me banaya tha
 
 
-// export const signup = async (req, res) => {
-//   const { fullName, email, password, bio } = req.body;
-
-//   try {
-//     // 1️⃣ Validate fields
-//     if (!fullName || !email || !password || !bio) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "All fields are required",
-//       });
-//     }
-
-//     // 2️⃣ Check existing user
-//     const existingUser = await User.findOne({ email });
-//     if (existingUser) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Account already exists",
-//       });
-//     }
-
-//     // 3️⃣ Hash password
-//     const salt = await bcrypt.genSalt(10);
-//     const hashedPassword = await bcrypt.hash(password, salt);
-
-//     // 4️⃣ Create user
-//     const user = await User.create({
-//       fullName,
-//       email,
-//       password: hashedPassword,
-//       bio,
-//     });
-
-//     // 5️⃣ Generate token
-//     const token = generateToken(user._id);
-
-//     // 6️⃣ Success response
-//     return res.status(201).json({
-//       success: true,
-//       message: "Signup successful",
-//       token,
-//       data: {
-//         id: user._id,
-//         fullName: user.fullName,
-//         email: user.email,
-//         bio: user.bio,
-//       },
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//     });
-//   }
-// };
 
 
 export const signup = async (req, res) => {
@@ -210,6 +155,58 @@ console.log("updateProfile userId:", userId);
   }
 };
 
+export const removeFcmToken = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, {
+      fcmToken: null,
+    });
 
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to remove FCM token",
+    });
+  }
+};
 
+export const saveFcmToken = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { token } = req.body;
 
+    await User.updateOne(
+      { _id: userId },
+      { fcmToken: token }
+    );
+
+    res.json({ success: true, message: "FCM token saved" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const sendNotification = async (req, res) => {
+  const { userId, title, body } = req.body;
+
+  try {
+    // Fetch user's FCM token from DB
+    const user = await User.findById(userId);
+
+    if (!user || !user.fcmToken) {
+      return res.status(400).json({ success: false, message: "User has no FCM token" });
+    }
+
+    // Send notification via Firebase Admin SDK
+    await admin.messaging().send({
+      token: user.fcmToken,
+      notification: { title, body },
+    });
+
+    res.json({ success: true, message: "Notification sent" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to send notification" });
+  }
+};

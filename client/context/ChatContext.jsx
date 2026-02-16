@@ -11,6 +11,7 @@ export const ChatProvider = ({children}) => {
     const[selectedUser, setSelectedUser] = useState(null);
     const [unseenMessages, setUnseenMessages] = useState({});
     const { socket } = useContext(AuthContext);
+  const [chatTheme, setChatTheme] = useState("whatsapp");
 
 
     const getUsers = async () => {
@@ -145,7 +146,9 @@ setSelectedUser,
 unseenMessages,
 setUnseenMessages,
 getMessages,
-sendMessages        
+sendMessages,
+ chatTheme,
+        setChatTheme,
     }
     return(
 <ChatContext.Provider value={value}>

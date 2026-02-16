@@ -3,6 +3,7 @@ import User from "../model/User.js";
 import Message from "../model/message.js";
 import cloudinary from "../lib/cloudinary.js"
 import {io,userSocketMap} from "../server.js"
+import admin from "../config/firebaseAdmin.js";
 
 
 
@@ -99,40 +100,94 @@ export const markMessageAsSeen = async (req, res) => {
   }
 }
 
+// export const sendMessage = async (req, res) => {
+//   try {
+//     const { text, image } = req.body
+//     const receiverId = req.params.id
+//     const senderId = req.user._id
+
+// let imageUrl;
+// if(image){
+// const uploadResponse = await cloudinary.uploader.upload(image)
+// imageUrl = uploadResponse.secure_url;
+// }
+// const newMessage = await Message.create({
+//     senderId,
+//     receiverId,
+//     text,
+//     image:imageUrl,
+//       seen: false,
+// })
+// const receiverSocketId= userSocketMap[receiverId];
+// console.log("receiverSocketId", receiverSocketId)
+// if(receiverSocketId){
+//     if(receiverSocketId){
+//  io.to(receiverSocketId).emit("newMessage", newMessage)
+//     }
+// }
+//  res.json({
+//       success: true,
+//       newMessage
+//     })
+//   } catch (error) {
+//     console.log(error.message)
+//      res.json({
+//       success: false,
+//       message: error.message,
+//     })
+//   }
+// }
+
+
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image } = req.body
-    const receiverId = req.params.id
-    const senderId = req.user._id
+    const { text, image } = req.body;
+    const receiverId = req.params.id;
+    const senderId = req.user._id;
 
-let imageUrl;
-if(image){
-const uploadResponse = await cloudinary.uploader.upload(image)
-imageUrl = uploadResponse.secure_url;
-}
-const newMessage = await Message.create({
-    senderId,
-    receiverId,
-    text,
-    image:imageUrl,
-      seen: false,
-})
-const receiverSocketId= userSocketMap[receiverId];
-console.log("receiverSocketId", receiverSocketId)
-if(receiverSocketId){
-    if(receiverSocketId){
- io.to(receiverSocketId).emit("newMessage", newMessage)
+    let imageUrl;
+    if (image) {
+      const uploadResponse = await cloudinary.uploader.upload(image);
+      imageUrl = uploadResponse.secure_url;
     }
-}
- res.json({
-      success: true,
-      newMessage
-    })
+
+    const newMessage = await Message.create({
+      senderId,
+      receiverId,
+      text,
+      image: imageUrl,
+      seen: false,
+    });
+
+    const receiverSocketId = userSocketMap[receiverId];
+
+    // 🔵 Socket.IO real-time notification
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    } else {
+      // 🔴 Offline → send FCM push notification
+      const receiver = await User.findById(receiverId);
+      const tokens = receiver.fcmTokens || [];
+
+      if (tokens.length > 0) {
+        const payload = {
+          notification: {
+            title: `New message from ${req.user.fullName}`,
+            body: text || "You received a new message",
+          },
+          data: {
+            senderId: senderId.toString(),
+            messageId: newMessage._id.toString(),
+          },
+        };
+
+        await admin.messaging().sendToDevice(tokens, payload);
+      }
+    }
+
+    res.json({ success: true, newMessage });
   } catch (error) {
-    console.log(error.message)
-     res.json({
-      success: false,
-      message: error.message,
-    })
+    console.log(error.message);
+    res.json({ success: false, message: error.message });
   }
-}
+};

@@ -5,6 +5,7 @@ import axios from "axios";
 import toast from "react-hot-toast"; // ✅ FIXED
 import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
+import { registerForPushNotifications } from "../src/firebase/notification";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
 axios.defaults.baseURL = backendUrl;
@@ -60,35 +61,41 @@ console.log("data",data);
     }
   };
 
-  // ✅ LOGOUT
-  // const logout = () => {
-  //   localStorage.removeItem("token");
-  //   setToken(null);
-  //   setAuthUser(null);
-  //   setOnlineUsers([]);
+// const logout = () => {
+//   // 1️⃣ Disconnect socket FIRST
+//   socket?.disconnect();
+//   setSocket(null); // 🔥 MOST IMPORTANT
 
-  //   axios.defaults.headers.common["token"] = null;
+//   // 2️⃣ Clear auth data
+//   localStorage.removeItem("token");
+//   setToken(null);
+//   setAuthUser(null);
+//   setOnlineUsers([]);
 
-  //   socket?.disconnect(); // ✅ FIXED
-  //   toast.success("Logged out successfully"); // ✅ FIXED
-  // };
+//   // 3️⃣ Remove axios auth header
+//   delete axios.defaults.headers.common["Authorization"];
 
-const logout = () => {
-  // 1️⃣ Disconnect socket FIRST
-  socket?.disconnect();
-  setSocket(null); // 🔥 MOST IMPORTANT
+//   toast.success("Logged out successfully");
+// };
 
-  // 2️⃣ Clear auth data
-  localStorage.removeItem("token");
-  setToken(null);
-  setAuthUser(null);
-  setOnlineUsers([]);
 
-  // 3️⃣ Remove axios auth header
-  delete axios.defaults.headers.common["Authorization"];
+  const logout = async () => {
+    try {
+      await axios.post("/api/auth/remove-fcm-token");
+    } catch (err) {}
 
-  toast.success("Logged out successfully");
-};
+    socket?.disconnect();
+    setSocket(null);
+
+    localStorage.removeItem("token");
+    setToken(null);
+    setAuthUser(null);
+    setOnlineUsers([]);
+
+    delete axios.defaults.headers.common["Authorization"];
+    toast.success("Logged out successfully");
+  };
+
 
   // ✅ UPDATE PROFILE
   const updateProfile = async (body) => {
@@ -104,19 +111,7 @@ const logout = () => {
     }
   };
 
-  // ✅ SOCKET CONNECTION
-  // const connectSocket = (userData) => {
-  //   console.log("Connecting socket for user:", userData);
-  //   if (!userData || socket?.connected) return;
 
-  //   const newSocket = io(backendUrl, {
-  //     query: { userId: userData._id },
-  //   });
-  //     setSocket(newSocket); 
-  //   newSocket.on("getOnlineUsers", (userIds) => {
-  //      setOnlineUsers(userIds);
-  //   });
-  // };
 useEffect(() => {
   if (!authUser) {
     // logout case
@@ -150,7 +145,11 @@ useEffect(() => {
   };
 }, [authUser]);
 
-
+  useEffect(() => {
+    if (authUser) {
+      registerForPushNotifications();
+    }
+  }, [authUser]);
 
   // ✅ INIT
  useEffect(() => {

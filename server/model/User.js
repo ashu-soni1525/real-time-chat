@@ -32,7 +32,9 @@ const userSchema = new mongoose.Schema(
      bio: {
       type: String,
       default: ""
-    }
+    },
+        fcmTokens: { type: [String], default: [] }, // 🔥 add this
+
   },
   { timestamps: true }
 )

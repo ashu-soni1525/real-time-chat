@@ -72,61 +72,34 @@ const sendMessages = async (messagesData) => {
   }
 };
 
-
-// const subscribeToMessages = async () => {
-//   if (!socket) return;
-
-//   socket.on("newMessage", (newMessage) => {
-//     if (selectedUser && newMessage.senderId === selectedUser._id) {
-//       newMessage.seen = true;
-
-//       setMessages((prevMessages) => [...prevMessages, newMessage]);
-
-//       axios.put(`/api/messages/mark/${newMessage._id}`);
-//     } else {
-//       setUnseenMessages((prevUnseenMessages) => ({
-//         ...prevUnseenMessages,
-//         [newMessage.senderId]:
-//           prevUnseenMessages[newMessage.senderId]
-//             ? prevUnseenMessages[newMessage.senderId] + 1
-//             : 1,
-//       }));
-//     }
-//   });
-// };
-
-// const unSubscribeFromMessages =  () => {
-// if(socket) (socket).off("newMessage");
-// }
-
-// useEffect(() => {
-// subscribeToMessages();
-// return () => unSubscribeFromMessages();
-// },[socket,selectedUser])
-
-
   useEffect(() => {
     if (!socket) return;
+const handleNewMessage = (newMessage) => {
+  const senderId = newMessage.senderId?.toString();
 
-    const handleNewMessage = (newMessage) => {
-      const senderId = newMessage.senderId?.toString();
+  const isSameChat =
+    selectedUser &&
+    senderId === selectedUser._id.toString();
 
-      if (
-        selectedUser &&
-        senderId === selectedUser._id.toString()
-      ) {
-        // message belongs to currently open chat
-        setMessages((prev) => [...prev, newMessage]);
+  if (isSameChat) {
+    setMessages((prev) => [...prev, newMessage]);
+    axios.put(`/api/messages/mark/${newMessage._id}`);
+    return;
+  }
 
-        axios.put(`/api/messages/mark/${newMessage._id}`);
-      } else {
-        // message from another user → unseen count
-        setUnseenMessages((prev) => ({
-          ...prev,
-          [senderId]: (prev[senderId] || 0) + 1,
-        }));
-      }
-    };
+  // 🔔 TAB SWITCH NOTIFICATION
+  if (document.visibilityState === "hidden") {
+    new Notification("New Message", {
+      body: newMessage.text || "You received a message",
+      icon: "/logo.png",
+    });
+  }
+
+  setUnseenMessages((prev) => ({
+    ...prev,
+    [senderId]: (prev[senderId] || 0) + 1,
+  }));
+};
 
     socket.on("newMessage", handleNewMessage);
 

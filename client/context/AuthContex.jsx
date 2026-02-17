@@ -1,11 +1,10 @@
-
-
 import { createContext, useState, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast"; // ✅ FIXED
 import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
 import { registerForPushNotifications } from "../src/firebase/notification";
+import { initForegroundFCM } from "../src/firebase/onMessageListener";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
 axios.defaults.baseURL = backendUrl;
@@ -13,38 +12,57 @@ axios.defaults.baseURL = backendUrl;
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [authUser, setAuthUser] = useState(null);
-    const [loading, setLoading] = useState(true); // ✅ ADD
+  const [loading, setLoading] = useState(true); // ✅ ADD
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [socket, setSocket] = useState(null);
+  useEffect(() => {
+    if (!socket) return;
 
+    const handleVisibilityChange = () => {
+      socket.emit("tab-visibility", {
+        isVisible: document.visibilityState === "visible",
+      });
+    };
+
+    // initial state
+    handleVisibilityChange();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [socket]);
+  useEffect(() => {
+    initForegroundFCM();
+  }, []);
 
   // ✅ CHECK AUTH
- const checkAuth = async () => {
-  try {
-    const { data } = await axios.get("/api/auth/check");
+  const checkAuth = async () => {
+    try {
+      const { data } = await axios.get("/api/auth/check");
 
-    if (data.success) {
-      setAuthUser(data.user);
-    } else {
+      if (data.success) {
+        setAuthUser(data.user);
+      } else {
+        setAuthUser(null);
+      }
+    } catch (err) {
       setAuthUser(null);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    setAuthUser(null);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const login = async (state, credentials) => {
     try {
       // ❌ GET ❌ → ✅ POST
       const { data } = await axios.post(`/api/auth/${state}`, credentials);
-console.log("data",data);
+      console.log("data", data);
       if (data.success) {
-
         setAuthUser(data.data);
         setToken(data.token);
 
@@ -52,32 +70,31 @@ console.log("data",data);
         localStorage.setItem("token", data.token);
         axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
         toast.success(data.message);
-        navigate("/")
-         
-  setLoading(false); // ✅ ADD
+        navigate("/");
+
+        setLoading(false); // ✅ ADD
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message);
     }
   };
 
-// const logout = () => {
-//   // 1️⃣ Disconnect socket FIRST
-//   socket?.disconnect();
-//   setSocket(null); // 🔥 MOST IMPORTANT
+  // const logout = () => {
+  //   // 1️⃣ Disconnect socket FIRST
+  //   socket?.disconnect();
+  //   setSocket(null); // 🔥 MOST IMPORTANT
 
-//   // 2️⃣ Clear auth data
-//   localStorage.removeItem("token");
-//   setToken(null);
-//   setAuthUser(null);
-//   setOnlineUsers([]);
+  //   // 2️⃣ Clear auth data
+  //   localStorage.removeItem("token");
+  //   setToken(null);
+  //   setAuthUser(null);
+  //   setOnlineUsers([]);
 
-//   // 3️⃣ Remove axios auth header
-//   delete axios.defaults.headers.common["Authorization"];
+  //   // 3️⃣ Remove axios auth header
+  //   delete axios.defaults.headers.common["Authorization"];
 
-//   toast.success("Logged out successfully");
-// };
-
+  //   toast.success("Logged out successfully");
+  // };
 
   const logout = async () => {
     try {
@@ -96,7 +113,6 @@ console.log("data",data);
     toast.success("Logged out successfully");
   };
 
-
   // ✅ UPDATE PROFILE
   const updateProfile = async (body) => {
     try {
@@ -111,39 +127,38 @@ console.log("data",data);
     }
   };
 
-
-useEffect(() => {
-  if (!authUser) {
-    // logout case
-    if (socket) {
-      socket.disconnect();
-      setSocket(null);
+  useEffect(() => {
+    if (!authUser) {
+      // logout case
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      return;
     }
-    return;
-  }
-  const userId = authUser._id || authUser.id;
+    const userId = authUser._id || authUser.id;
 
-  // 🔥 create fresh socket when authUser exists
-  const newSocket = io(backendUrl, {
-    query: { userId }, 
-    transports: ["websocket"],
-  });
+    // 🔥 create fresh socket when authUser exists
+    const newSocket = io(backendUrl, {
+      query: { userId },
+      transports: ["websocket"],
+    });
 
-  setSocket(newSocket);
+    setSocket(newSocket);
 
-  newSocket.on("connect", () => {
-    console.log("✅ Socket connected:", newSocket.id);
-  });
+    newSocket.on("connect", () => {
+      console.log("✅ Socket connected:", newSocket.id);
+    });
 
-  newSocket.on("getOnlineUsers", (userIds) => {
-    console.log("🟢 Online users:", userIds);
-    setOnlineUsers(userIds);
-  });
+    newSocket.on("getOnlineUsers", (userIds) => {
+      console.log("🟢 Online users:", userIds);
+      setOnlineUsers(userIds);
+    });
 
-  return () => {
-    newSocket.disconnect();
-  };
-}, [authUser]);
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [authUser]);
 
   useEffect(() => {
     if (authUser) {
@@ -152,7 +167,7 @@ useEffect(() => {
   }, [authUser]);
 
   // ✅ INIT
- useEffect(() => {
+  useEffect(() => {
     const token = localStorage.getItem("token");
 
     if (token) {
@@ -167,7 +182,7 @@ useEffect(() => {
     <AuthContext.Provider
       value={{
         authUser,
-        loading,  
+        loading,
         onlineUsers,
         socket,
         login,
@@ -179,4 +194,3 @@ useEffect(() => {
     </AuthContext.Provider>
   );
 };
-

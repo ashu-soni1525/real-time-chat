@@ -3,7 +3,7 @@ import User from "../model/User.js";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../lib/utils.js";
 import cloudinary from "../lib/cloudinary.js"
-import admin from '../config/firebaseAdmin.js'; // Step 3 me banaya tha
+import admin from "../config/firebase-admin.js";
 
 
 
@@ -157,27 +157,58 @@ console.log("updateProfile userId:", userId);
 
 export const removeFcmToken = async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user._id, {
-      fcmToken: null,
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to remove FCM token",
-    });
-  }
-};
-
-export const saveFcmToken = async (req, res) => {
-  try {
     const userId = req.user._id;
     const { token } = req.body;
 
-    await User.updateOne(
-      { _id: userId },
-      { fcmToken: token }
+    if (!token) return res.status(400).json({ success: false, message: "Token required" });
+
+    await User.findByIdAndUpdate(
+      userId,
+      { $pull: { fcmTokens: token } }, // 🔥 remove the token
+      { new: true }
+    );
+
+    res.json({ success: true, message: "FCM token removed" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// export const saveFcmToken = async (req, res) => {
+//   try {
+//     console.log("🔥 req.user:", req.user); // ADD THIS
+//     const userId = req.user?._id;
+//     const { token } = req.body;
+
+//     if (!userId) return res.status(401).json({ success: false, message: "User not authenticated" });
+//     if (!token) return res.status(400).json({ success: false, message: "No token provided" });
+
+//     await User.updateOne(
+//       { _id: userId },
+//       { $addToSet: { fcmTokens: token } }
+//     );
+
+//     res.json({ success: true, message: "FCM token saved" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
+
+export const saveFcmToken = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+    const { token } = req.body;
+
+    if (!token) return res.status(400).json({ success: false, message: "Token required" });
+
+    // Add token if not exists
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { fcmTokens: token } }, // 🔥 $addToSet avoids duplicates
+      { new: true }
     );
 
     res.json({ success: true, message: "FCM token saved" });
@@ -191,22 +222,27 @@ export const sendNotification = async (req, res) => {
   const { userId, title, body } = req.body;
 
   try {
-    // Fetch user's FCM token from DB
+    // Fetch user's FCM tokens from DB
     const user = await User.findById(userId);
 
-    if (!user || !user.fcmToken) {
-      return res.status(400).json({ success: false, message: "User has no FCM token" });
+    if (!user || !user.fcmTokens || user.fcmTokens.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User has no FCM tokens" });
     }
 
-    // Send notification via Firebase Admin SDK
-    await admin.messaging().send({
-      token: user.fcmToken,
+    const payload = {
       notification: { title, body },
-    });
+    };
 
-    res.json({ success: true, message: "Notification sent" });
+    // Send notification to all tokens
+    const response = await admin.messaging().sendToDevice(user.fcmTokens, payload);
+console.log("Notification response:", response);
+    res.json({ success: true, message: "Notification sent", response });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Failed to send notification" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to send notification", error: err.message });
   }
 };

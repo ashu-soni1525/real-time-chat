@@ -5,7 +5,6 @@ import axios from "axios";
 export const registerForPushNotifications = async () => {
   try {
     const permission = await Notification.requestPermission();
-
     if (permission !== "granted") {
       console.log("❌ Notification permission denied");
       return;
@@ -13,15 +12,14 @@ export const registerForPushNotifications = async () => {
 
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: await navigator.serviceWorker.ready, // 🔥 THIS FIXES YOUR ERROR
     });
 
     if (token) {
-      console.log("🔥 FCM TOKEN:", token);
-
-      // ✅ Send token to backend
+      console.log("🔥 FCM Token:", token);
       await axios.post("/api/auth/save-fcm-token", { token });
     }
-  } catch (error) {
-    console.error("FCM error:", error);
+  } catch (err) {
+    console.error("FCM error:", err);
   }
 };
